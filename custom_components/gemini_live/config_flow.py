@@ -17,12 +17,14 @@ from .const import (
     CONF_PROVIDER,
     CONF_SHOW_TEXT,
     CONF_SYSTEM_INSTRUCTION,
+    CONF_SUPPORT_BARGE_IN,
     CONF_TRANSCRIBE_GEMINI,
     CONF_TRANSCRIBE_GPT,
     CONF_VOICE,
     DEFAULT_ENCOURAGE_WEB_SEARCH,
     DEFAULT_MODEL,
     DEFAULT_SHOW_TEXT,
+    DEFAULT_SUPPORT_BARGE_IN,
     DEFAULT_TRANSCRIBE_GEMINI,
     DEFAULT_TRANSCRIBE_GPT,
     DEFAULT_VOICE,
@@ -126,6 +128,13 @@ def _provider_schema(provider: str, config: dict[str, Any] | None = None) -> vol
         vol.Optional(
             CONF_SHOW_TEXT,
             default=current.get(CONF_SHOW_TEXT, DEFAULT_SHOW_TEXT),
+        ): selector.BooleanSelector(),
+        vol.Optional(
+            CONF_SUPPORT_BARGE_IN,
+            default=current.get(
+                CONF_SUPPORT_BARGE_IN,
+                DEFAULT_SUPPORT_BARGE_IN,
+            ),
         ): selector.BooleanSelector(),
     }
     return vol.Schema(fields)

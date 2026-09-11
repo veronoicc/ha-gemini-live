@@ -12,6 +12,7 @@ CONF_TRANSCRIBE_GEMINI = "transcribe_gemini"
 CONF_TRANSCRIBE_GPT = "transcribe_gpt"
 CONF_ENCOURAGE_WEB_SEARCH = "encourage_web_search"
 CONF_SHOW_TEXT = "show_text"
+CONF_SUPPORT_BARGE_IN = "support_barge_in"
 
 DEFAULT_MODEL = "gemini-3.1-flash-live-preview"
 DEFAULT_VOICE = "Puck"
@@ -19,6 +20,7 @@ DEFAULT_TRANSCRIBE_GEMINI = False
 DEFAULT_TRANSCRIBE_GPT = False
 DEFAULT_ENCOURAGE_WEB_SEARCH = False
 DEFAULT_SHOW_TEXT = True
+DEFAULT_SUPPORT_BARGE_IN = False
 PROVIDER_GEMINI = "gemini"
 PROVIDER_OPENAI = "openai"
 GEMINI_LIVE_TTS_PLACEHOLDER = "-- gemini live --"
