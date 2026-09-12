@@ -110,6 +110,16 @@ _PREPAYMENT_CREDITS_USER_MESSAGE = (
     "or manage your project's billing."
 )
 
+_OPENAI_NO_CREDITS_ERROR_MARKER = "no credits remaining"
+_OPENAI_NO_CREDITS_ISSUE_PREFIX = "openai_no_credits"
+_OPENAI_NO_CREDITS_URL = (
+    "https://platform.openai.com/settings/organization/billing/"
+)
+_OPENAI_NO_CREDITS_USER_MESSAGE = (
+    "GPT Realtime is unavailable because your OpenAI account has no credits "
+    f"remaining. Please go to {_OPENAI_NO_CREDITS_URL} to add credits."
+)
+
 END_CONVERSATION_TOOL_NAME = "end_conversation"
 
 _END_CONVERSATION_INSTRUCTION = (
@@ -197,6 +207,8 @@ def _user_visible_api_error(exc: BaseException) -> str | None:
             return _SPENDING_CAP_USER_MESSAGE
         if _PREPAYMENT_CREDITS_ERROR_MARKER in error_text:
             return _PREPAYMENT_CREDITS_USER_MESSAGE
+        if _OPENAI_NO_CREDITS_ERROR_MARKER in error_text:
+            return _OPENAI_NO_CREDITS_USER_MESSAGE
         current = current.__cause__ or current.__context__
     return None
 
@@ -209,6 +221,11 @@ def _spending_cap_issue_id(entry_id: str) -> str:
 def _prepayment_credits_issue_id(entry_id: str) -> str:
     """Return the prepaid credits Repairs issue ID for one config entry."""
     return f"{_PREPAYMENT_CREDITS_ISSUE_PREFIX}_{entry_id}"
+
+
+def _openai_no_credits_issue_id(entry_id: str) -> str:
+    """Return the OpenAI credits Repairs issue ID for one config entry."""
+    return f"{_OPENAI_NO_CREDITS_ISSUE_PREFIX}_{entry_id}"
 
 
 # ---------------------------------------------------------------------------
@@ -627,6 +644,11 @@ class LiveModelSTT(SpeechToTextEntity):
                 self.integration_domain,
                 _prepayment_credits_issue_id(self.entry.entry_id),
             )
+            async_delete_issue(
+                self.hass,
+                self.integration_domain,
+                _openai_no_credits_issue_id(self.entry.entry_id),
+            )
             _LOGGER.warning(
                 "[turn=%s] acquired live-model session conversation=%s",
                 turn_id,
@@ -889,7 +911,7 @@ class LiveModelSTT(SpeechToTextEntity):
                             )
                             first_audio.set()
 
-                        if response.output_transcript:
+                        if transcribe_output and response.output_transcript:
                             transcription = response.output_transcript
                             _LOGGER.debug(
                                 "[turn=%s] output transcription chunk len=%d",
@@ -1209,23 +1231,31 @@ class LiveModelSTT(SpeechToTextEntity):
                 result_future.set_result(SpeechResult(None, SpeechResultState.ERROR))
             except Exception as exc:  # noqa: BLE001
                 if user_message := self._api_error_message(exc):
-                    prepayment_credits_depleted = (
-                        user_message == _PREPAYMENT_CREDITS_USER_MESSAGE
-                    )
-                    issue_id = (
-                        _prepayment_credits_issue_id(self.entry.entry_id)
-                        if prepayment_credits_depleted
-                        else _spending_cap_issue_id(self.entry.entry_id)
-                    )
-                    issue_url = (
-                        _PREPAYMENT_CREDITS_URL
-                        if prepayment_credits_depleted
-                        else _SPENDING_CAP_URL
-                    )
-                    translation_key = "spending_cap_exceeded"
+                    if user_message == _SPENDING_CAP_USER_MESSAGE:
+                        issue_id = _spending_cap_issue_id(self.entry.entry_id)
+                        issue_url = _SPENDING_CAP_URL
+                        translation_key = "spending_cap_exceeded"
+                        url_placeholder = "spending_cap_url"
+                        reason = "the monthly spending cap was exceeded"
+                    elif user_message == _PREPAYMENT_CREDITS_USER_MESSAGE:
+                        issue_id = _prepayment_credits_issue_id(
+                            self.entry.entry_id
+                        )
+                        issue_url = _PREPAYMENT_CREDITS_URL
+                        translation_key = "spending_cap_exceeded"
+                        url_placeholder = "spending_cap_url"
+                        reason = "prepayment credits are depleted"
+                    else:
+                        issue_id = _openai_no_credits_issue_id(
+                            self.entry.entry_id
+                        )
+                        issue_url = _OPENAI_NO_CREDITS_URL
+                        translation_key = "openai_no_credits"
+                        url_placeholder = "billing_url"
+                        reason = "OpenAI credits are depleted"
                     translation_placeholders = {
                         "entry_title": self.entry.title,
-                        "spending_cap_url": issue_url,
+                        url_placeholder: issue_url,
                     }
                     async_create_issue(
                         self.hass,
@@ -1255,12 +1285,9 @@ class LiveModelSTT(SpeechToTextEntity):
                         )
                     )
                     _LOGGER.warning(
-                        "Gemini Live is unavailable because %s",
-                        (
-                            "prepayment credits are depleted"
-                            if prepayment_credits_depleted
-                            else "the monthly spending cap was exceeded"
-                        ),
+                        "%s is unavailable because %s",
+                        self.integration_name,
+                        reason,
                     )
                     result_future.set_result(
                         SpeechResult(user_message, SpeechResultState.SUCCESS)
@@ -1324,11 +1351,6 @@ class LiveModelSTT(SpeechToTextEntity):
                 DEFAULT_SUPPORT_BARGE_IN,
             )
         )
-        # Barge-in keeps the HA conversation stage alive through streamed
-        # response transcripts, so it requires output transcription internally.
-        provider_transcribe_output = (
-            user_requested_transcription or support_barge_in
-        )
         encourage_web_search = bool(
             config.get(CONF_ENCOURAGE_WEB_SEARCH, DEFAULT_ENCOURAGE_WEB_SEARCH)
         )
@@ -1360,7 +1382,7 @@ class LiveModelSTT(SpeechToTextEntity):
             model,
             voice,
             custom_instruction,
-            provider_transcribe_output,
+            user_requested_transcription,
             encourage_web_search,
             show_text,
             support_barge_in,
@@ -1398,5 +1420,5 @@ class GPTRealtimeSTT(LiveModelSTT):
 
     @staticmethod
     def _api_error_message(exc: BaseException) -> str | None:
-        """OpenAI errors are currently surfaced through normal HA error handling."""
-        return None
+        """Return OpenAI billing errors that the user can resolve."""
+        return _user_visible_api_error(exc)

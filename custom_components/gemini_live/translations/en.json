@@ -30,11 +30,11 @@
           "voice": "Built-in voice used for spoken replies.",
           "system_instruction": "Optional custom personality and behavior. Home Assistant's Assist tool instructions are appended automatically.",
           "detailed_logging": "Write transcripts, model details, and tool calls to the Home Assistant log. Enable only while troubleshooting.",
-          "transcribe_gemini": "Stream Gemini's spoken-response transcript into Home Assistant. Disabling this gives the lowest reply-audio latency. Barge-in requires live output transcription internally and may override this setting while barge-in is enabled.",
-          "transcribe_gpt": "Stream GPT's spoken-response transcript into Home Assistant. Disabling this gives the lowest reply-audio latency. Barge-in requires live output transcription internally and may override this setting while barge-in is enabled.",
+          "transcribe_gemini": "Stream Gemini's spoken-response transcript into Home Assistant. Disabling this gives the lowest reply-audio latency.",
+          "transcribe_gpt": "Stream GPT's spoken-response transcript into Home Assistant. Disabling this gives the lowest reply-audio latency.",
           "encourage_web_search": "Tell the model to use an exposed search-like Assist tool for current or explicitly requested online information.",
           "show_text": "Expose show_text so the model can display formatted text when response transcription is off.",
-          "support_barge_in": "Experimental: keep microphone audio streaming while the live model is speaking so the user can interrupt a response. Requires a full-duplex voice client/satellite that keeps transmitting microphone audio during playback, and may increase realtime transcription and audio usage."
+          "support_barge_in": "Experimental: keep microphone audio streaming while the live model is speaking so the user can interrupt a response. Requires a full-duplex voice client/satellite that keeps transmitting microphone audio during playback, and may increase realtime audio usage."
         }
       },
       "reconfigure": {
@@ -53,7 +53,7 @@
           "support_barge_in": "Support barge-in"
         },
         "data_description": {
-          "support_barge_in": "Experimental: keep microphone audio streaming while the live model is speaking so the user can interrupt a response. Requires a full-duplex voice client/satellite that keeps transmitting microphone audio during playback, and may increase realtime transcription and audio usage."
+          "support_barge_in": "Experimental: keep microphone audio streaming while the live model is speaking so the user can interrupt a response. Requires a full-duplex voice client/satellite that keeps transmitting microphone audio during playback, and may increase realtime audio usage."
         }
       }
     },
@@ -79,7 +79,7 @@
           "support_barge_in": "Support barge-in"
         },
         "data_description": {
-          "support_barge_in": "Experimental: keep microphone audio streaming while the live model is speaking so the user can interrupt a response. Requires a full-duplex voice client/satellite that keeps transmitting microphone audio during playback, and may increase realtime transcription and audio usage."
+          "support_barge_in": "Experimental: keep microphone audio streaming while the live model is speaking so the user can interrupt a response. Requires a full-duplex voice client/satellite that keeps transmitting microphone audio during playback, and may increase realtime audio usage."
         }
       }
     }
@@ -88,6 +88,10 @@
     "spending_cap_exceeded": {
       "title": "Gemini Live billing unavailable",
       "description": "The Google AI project used by **{entry_title}** cannot process Gemini Live requests because its spending cap or available prepaid credit balance has been exhausted. [Manage the project's billing]({spending_cap_url}), then try Gemini Live again. This issue will clear automatically after Gemini Live connects successfully."
+    },
+    "openai_no_credits": {
+      "title": "OpenAI credits depleted",
+      "description": "The OpenAI account used by **{entry_title}** cannot process GPT Realtime requests because it has no credits remaining. [Add credits to the account]({billing_url}), then try GPT Realtime again. This issue will clear automatically after GPT Realtime connects successfully."
     }
   }
 }

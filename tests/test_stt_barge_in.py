@@ -136,14 +136,24 @@ class ScriptedSession:
     async def receive(self):
         if self.support_barge_in:
             self.reply_started.set()
-            yield LiveEvent(audio=AUDIO_A)
+            yield LiveEvent(input_transcript="user request")
+            yield LiveEvent(
+                audio=AUDIO_A,
+                output_transcript="interrupted transcript",
+            )
             await self.release_gate.wait()
             yield LiveEvent(interrupted=True, turn_complete=True)
-            yield LiveEvent(audio=AUDIO_B)
+            yield LiveEvent(
+                audio=AUDIO_B,
+                output_transcript="replacement transcript",
+            )
             yield LiveEvent(turn_complete=True)
         else:
             self.reply_started.set()
-            yield LiveEvent(audio=AUDIO_A)
+            yield LiveEvent(
+                audio=AUDIO_A,
+                output_transcript="unsolicited transcript",
+            )
             await self.release_gate.wait()
             yield LiveEvent(turn_complete=True)
 
@@ -250,7 +260,6 @@ async def test_barge_in_keeps_microphone_forwarding_after_reply(
             "m",
             "v",
             "",
-            # Barge-in always runs with provider output transcription enabled.
             True,
             False,
             False,
@@ -349,15 +358,16 @@ async def test_legacy_mode_stops_microphone_forwarding_after_reply(
     assert turn is not None
     chunks = [chunk async for chunk in turn.audio.async_chunks()]
     assert chunks == [resample_24k_to_16k(AUDIO_A)]
+    assert "transcript" not in turn.assistant_text
     assert scripted_client.captured_config.support_barge_in is False
     assert scripted_client.captured_config.transcribe_output is False
 
 
 @pytest.mark.parametrize("entity_class", ENTITY_CLASSES)
-async def test_barge_in_forces_provider_output_transcription(
+async def test_barge_in_drops_provider_transcript_when_transcription_disabled(
     entity_class,
 ) -> None:
-    """Barge-in via the public API forces transcription for the TextStream."""
+    """Do not expose an unsolicited provider transcript when disabled."""
     hass = FakeHass()
     transcribe_key = (
         CONF_TRANSCRIBE_GPT
@@ -369,7 +379,7 @@ async def test_barge_in_forces_provider_output_transcription(
         transcribe_key: False,
         CONF_SUPPORT_BARGE_IN: True,
     }
-    entity, _session_manager, _turn_store = _make_entity(hass, entry_data, entity_class)
+    entity, _session_manager, turn_store = _make_entity(hass, entry_data, entity_class)
     session = ScriptedSession(support_barge_in=True)
     scripted_client = ScriptedClient(session)
     _bind_client(entity, scripted_client)
@@ -381,12 +391,18 @@ async def test_barge_in_forces_provider_output_transcription(
 
     mic.put(MIC_CHUNK)
     await asyncio.wait_for(session.reply_started.wait(), 5)
-    await asyncio.wait_for(process_task, 15)
+    result = await asyncio.wait_for(process_task, 15)
 
     assert scripted_client.captured_config.support_barge_in is True
-    assert scripted_client.captured_config.transcribe_output is True
+    assert scripted_client.captured_config.transcribe_output is False
+    assert result.text == "user request"
 
     session.release_gate.set()
     mic.close()
     for task in list(hass.background_tasks):
         await asyncio.wait_for(task, 15)
+
+    turn = turn_store.take_voice_turn("conversation-1", result.text)
+    assert turn is not None
+    assert turn.assistant_text_stream is None
+    assert "transcript" not in turn.assistant_text
