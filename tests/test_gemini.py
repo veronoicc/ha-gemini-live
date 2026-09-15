@@ -91,9 +91,10 @@ def test_gemini_config_legacy_keeps_existing_realtime_input_config():
 
     assert config["realtime_input_config"] == {
         "turn_coverage": "TURN_INCLUDES_ONLY_ACTIVITY",
-        "activity_handling": "NO_INTERRUPTION",
+        "automatic_activity_detection": {
+            "disabled": False,
+        },
     }
-
 def test_gemini_config_barge_in_enables_activity_interruption():
     config = _gemini_config(_make_config(support_barge_in=True))
 

@@ -175,15 +175,12 @@ class GeminiLiveSession:
 def _gemini_config(config: LiveConfig) -> dict[str, Any]:
     realtime_input: dict[str, Any] = {
         "turn_coverage": "TURN_INCLUDES_ONLY_ACTIVITY",
+        "automatic_activity_detection": {
+            "disabled": False,
+        },
     }
     if config.support_barge_in:
-        realtime_input["automatic_activity_detection"] = {
-            "disabled": False,
-        }
         realtime_input["activity_handling"] = "START_OF_ACTIVITY_INTERRUPTS"
-    else:
-        realtime_input["activity_handling"] = "NO_INTERRUPTION"
-
     result: dict[str, Any] = {
         "response_modalities": ["AUDIO"],
         "speech_config": {

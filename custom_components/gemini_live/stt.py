@@ -657,14 +657,14 @@ class LiveModelSTT(SpeechToTextEntity):
             )
 
             async def send_audio() -> None:
-                nonlocal audio_sent
+                nonlocal audio_sent, last_response_activity
                 try:
                     first_chunk = True
                     audio_buffer = bytearray()
                     diagnostics_enabled = _LOGGER.isEnabledFor(logging.DEBUG)
                     pcm_for_diag: list[bytes] = []
                     chunk_count = 0
-
+                    sample_rate = int(metadata.sample_rate) if metadata.sample_rate else 16000
                     _LOGGER.warning("[turn=%s] send_audio task spawned", turn_id)
 
                     async for chunk in stream:
@@ -708,6 +708,7 @@ class LiveModelSTT(SpeechToTextEntity):
                                 len(dispatch_chunk),
                             )
                             await session.send_audio(dispatch_chunk)
+                            last_response_activity = time.monotonic()
                             audio_sent = True
 
                     if len(audio_buffer) > 0 and (
@@ -723,6 +724,7 @@ class LiveModelSTT(SpeechToTextEntity):
                             len(dispatch_chunk),
                         )
                         await session.send_audio(dispatch_chunk)
+                        last_response_activity = time.monotonic()
                         audio_sent = True
 
                     if diagnostics_enabled and pcm_for_diag:
@@ -1071,6 +1073,7 @@ class LiveModelSTT(SpeechToTextEntity):
                             pass
                         return SpeechResult(None, SpeechResultState.ERROR)
 
+                    last_response_activity = time.monotonic()
                     while not receive_task.done():
                         remaining = RESPONSE_INACTIVITY_TIMEOUT - (
                             time.monotonic() - last_response_activity
