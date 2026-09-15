@@ -14,7 +14,7 @@ CONF_ENCOURAGE_WEB_SEARCH = "encourage_web_search"
 CONF_SHOW_TEXT = "show_text"
 CONF_SUPPORT_BARGE_IN = "support_barge_in"
 
-DEFAULT_MODEL = "gemini-3.1-flash-live-preview"
+DEFAULT_MODEL = "gemini-3.8-live"
 DEFAULT_VOICE = "Puck"
 DEFAULT_TRANSCRIBE_GEMINI = False
 DEFAULT_TRANSCRIBE_GPT = False
@@ -41,6 +41,8 @@ OPENAI_SYSTEM_INSTRUCTION = (
 )
 
 AVAILABLE_MODELS = [
+    "gemini-3.8-live-extended-thinking",
+    "gemini-3.8-live",
     "gemini-3.1-flash-live-preview",
     "gemini-2.5-flash-native-audio-preview-12-2025",
 ]
