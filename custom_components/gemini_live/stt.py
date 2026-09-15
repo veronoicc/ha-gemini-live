@@ -667,6 +667,7 @@ class LiveModelSTT(SpeechToTextEntity):
                     sample_rate = int(metadata.sample_rate) if metadata.sample_rate else 16000
                     speech_started = False
                     consecutive_silence = 0
+                    end_of_speech = False
                     _LOGGER.warning("[turn=%s] send_audio task spawned", turn_id)
 
                     async for chunk in stream:
@@ -724,11 +725,16 @@ class LiveModelSTT(SpeechToTextEntity):
                                     elif speech_started:
                                         consecutive_silence += 1
                                         if consecutive_silence >= 7:
-                                            _LOGGER.warning(
-                                                "[turn=%s] local silence detection triggered end of speech",
-                                                turn_id,
-                                            )
+                                            end_of_speech = True
                                             break
+
+                        if end_of_speech:
+                            _LOGGER.warning(
+                                "[turn=%s] local silence detection triggered end of speech",
+                                turn_id,
+                            )
+                            break
+
                     if len(audio_buffer) > 0 and (
                         support_barge_in or not gemini_replied.is_set()
                     ):
