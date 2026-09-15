@@ -16,8 +16,8 @@ from weakref import WeakValueDictionary
 
 from homeassistant.core import HomeAssistant
 
+from .const import GEMINI_LIVE_TTS_PLACEHOLDER
 from .live import LiveClient, LiveConfig, LiveSession
-
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -193,15 +193,27 @@ class TurnStore:
         user_text: str,
     ) -> PipelineTurn | None:
         """Take the oldest completed voice turn matching the STT transcript."""
+        # 1. Exact match on conversation_id and user_text
         for index, turn in enumerate(self._voice_turns):
-            if turn.user_text != user_text:
-                continue
-            if turn.conversation_id == conversation_id:
+            if turn.user_text == user_text and turn.conversation_id == conversation_id:
                 del self._voice_turns[index]
                 return turn
-        return None
 
-    def add_audio(self, assistant_text: str, audio: bytes | AudioStream) -> None:
+        # 2. Match on user_text across conversation IDs
+        for index, turn in enumerate(self._voice_turns):
+            if turn.user_text == user_text:
+                del self._voice_turns[index]
+                return turn
+
+        # 3. If user_text is placeholder or empty, take the most recent voice turn
+        if (
+            not user_text
+            or user_text.startswith(GEMINI_LIVE_TTS_PLACEHOLDER)
+            or user_text == "-- gemini live --"
+        ) and self._voice_turns:
+            return self._voice_turns.pop()
+
+        return None
         """Store one response's audio for the TTS stage."""
         if audio:
             self._audio.append((assistant_text, audio))

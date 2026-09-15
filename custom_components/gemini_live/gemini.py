@@ -81,7 +81,7 @@ class GeminiLiveSession:
         from google.genai import types  # noqa: PLC0415
 
         await self._session.send_realtime_input(
-            audio=types.Blob(data=audio, mime_type="audio/pcm;rate=16000")
+            media=types.Blob(data=audio, mime_type="audio/pcm;rate=16000")
         )
 
     async def end_audio(self) -> None:
@@ -177,6 +177,7 @@ def _gemini_config(config: LiveConfig) -> dict[str, Any]:
         "turn_coverage": "TURN_INCLUDES_ONLY_ACTIVITY",
         "automatic_activity_detection": {
             "disabled": False,
+            "silence_duration_ms": 600,
         },
     }
     if config.support_barge_in:

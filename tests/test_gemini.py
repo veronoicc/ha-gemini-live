@@ -93,6 +93,7 @@ def test_gemini_config_legacy_keeps_existing_realtime_input_config():
         "turn_coverage": "TURN_INCLUDES_ONLY_ACTIVITY",
         "automatic_activity_detection": {
             "disabled": False,
+            "silence_duration_ms": 600,
         },
     }
 def test_gemini_config_barge_in_enables_activity_interruption():
