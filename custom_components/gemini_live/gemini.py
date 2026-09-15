@@ -6,6 +6,7 @@ import codecs
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager
 from typing import Any
+import warnings
 
 from .live import LiveConfig, LiveEvent, LiveTool, LiveToolCall, LiveToolResponse
 
@@ -87,7 +88,12 @@ class GeminiLiveSession:
         await self._session.send_realtime_input(audio_stream_end=True)
 
     async def send_text(self, text: str) -> None:
-        await self._session.send_realtime_input(text=text)
+        from google.genai import types  # noqa: PLC0415
+
+        await self._session.send_client_content(
+            turns=[types.Content(role="user", parts=[types.Part(text=text)])],
+            turn_complete=True,
+        )
 
     async def send_tool_responses(
         self, responses: list[LiveToolResponse]
@@ -99,7 +105,11 @@ class GeminiLiveSession:
                 types.FunctionResponse(
                     name=response.name,
                     id=response.call_id,
-                    response=response.response,
+                    response=(
+                        response.response
+                        if isinstance(response.response, dict)
+                        else {"result": response.response}
+                    ),
                 )
                 for response in responses
             ]
@@ -202,6 +212,7 @@ def _gemini_tool(tool: LiveTool) -> dict[str, Any]:
     declaration: dict[str, Any] = {
         "name": tool.name,
         "description": tool.description,
+        "behavior": "BLOCKING",
     }
     if tool.parameters:
         declaration["parameters"] = _gemini_schema(tool.parameters)
@@ -209,11 +220,13 @@ def _gemini_tool(tool: LiveTool) -> dict[str, Any]:
 
 
 def _gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    if subschemas := schema.get("allOf"):
-        for subschema in subschemas:
-            if "type" in subschema:
-                return _gemini_schema(subschema)
-        return _gemini_schema(subschemas[0])
+    for combinator in ("allOf", "anyOf", "oneOf"):
+        if subschemas := schema.get(combinator):
+            for subschema in subschemas:
+                if isinstance(subschema, dict) and "type" in subschema:
+                    return _gemini_schema(subschema)
+            if isinstance(subschemas[0], dict):
+                return _gemini_schema(subschemas[0])
 
     result: dict[str, Any] = {}
     for original_key, original_value in schema.items():
@@ -252,11 +265,17 @@ def _camel_to_snake(name: str) -> str:
         "_" + char.lower() if char.isupper() else char for char in name
     ).lstrip("_")
 
-
 def _escape_decode(value: Any) -> Any:
     """Decode escaped Gemini string arguments recursively."""
     if isinstance(value, str):
-        return codecs.escape_decode(bytes(value, "utf-8"))[0].decode("utf-8")
+        if "\\" in value:
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", DeprecationWarning)
+                    return value.encode("utf-8").decode("unicode_escape")
+            except (UnicodeDecodeError, ValueError):
+                return value
+        return value
     if isinstance(value, list):
         return [_escape_decode(item) for item in value]
     if isinstance(value, dict):

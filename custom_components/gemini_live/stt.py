@@ -9,19 +9,30 @@ import time
 from uuid import uuid4
 from typing import Any
 
+from homeassistant.components import stt
 from homeassistant.components.stt import (
     AudioBitRates,
     AudioChannels,
     AudioCodecs,
     AudioFormats,
     AudioSampleRates,
-    DEFAULT_AUDIO_PROCESSING,
-    SpeechAudioProcessing,
     SpeechMetadata,
     SpeechResult,
     SpeechResultState,
     SpeechToTextEntity,
 )
+from dataclasses import dataclass
+
+
+@dataclass(slots=True)
+class SpeechAudioProcessing:
+    """Audio processing options for speech-to-text."""
+
+    requires_external_vad: bool = True
+    prefers_auto_gain_enabled: bool = True
+    prefers_noise_reduction_enabled: bool = True
+
+DEFAULT_AUDIO_PROCESSING = SpeechAudioProcessing()
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import chat_session, llm
@@ -325,7 +336,7 @@ def _add_search_tool_instruction(
 
 def _validate_tool_results(value: Any) -> Any:
     """Recursively convert non-json-serializable tool results."""
-    if isinstance(value, (datetime.time, datetime.date)):
+    if isinstance(value, (datetime.time, datetime.date, datetime.datetime)):
         return value.isoformat()
     if isinstance(value, list):
         return [_validate_tool_results(item) for item in value]
@@ -432,23 +443,11 @@ class LiveModelSTT(SpeechToTextEntity):
 
     @property
     def audio_processing(self) -> SpeechAudioProcessing:
-        """Let the live provider own turn detection while barge-in is enabled.
-
-        Home Assistant's end-of-command VAD would stop feeding the microphone
-        stream after the initial user command, which prevents barge-in. With
-        barge-in enabled the provider's own VAD decides when the user stops
-        and starts speaking, so the stream must stay open.
-        """
+        """Let the live provider own turn detection while barge-in is enabled."""
         config = {**self.entry.data, **self.entry.options}
-
-        if not config.get(
-            CONF_SUPPORT_BARGE_IN,
-            DEFAULT_SUPPORT_BARGE_IN,
-        ):
-            return DEFAULT_AUDIO_PROCESSING
-
+        barge_in = bool(config.get(CONF_SUPPORT_BARGE_IN, DEFAULT_SUPPORT_BARGE_IN))
         return SpeechAudioProcessing(
-            requires_external_vad=False,
+            requires_external_vad=not barge_in,
             prefers_auto_gain_enabled=True,
             prefers_noise_reduction_enabled=True,
         )
@@ -596,7 +595,9 @@ class LiveModelSTT(SpeechToTextEntity):
                 "[turn=%s] barge-in enabled for provider session", turn_id
             )
 
-        native_audio_model = "native-audio" in (model or "")
+        native_audio_model = bool(
+            model and (model.startswith("gemini-") or "audio" in model or "gpt-realtime" in model)
+        )
         _LOGGER.warning(
             "[turn=%s] setup model=%s native_audio_model=%s tools=%d",
             turn_id,

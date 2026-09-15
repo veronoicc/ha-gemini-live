@@ -263,7 +263,9 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         audio_response_chunks: list[bytes] = []
         resampled_pcm_chunks: list[bytes] = []
         wav_data = b""
-        native_audio_model = "native-audio" in (model or "")
+        native_audio_model = bool(
+            model and (model.startswith("gemini-") or "audio" in model or "gpt-realtime" in model)
+        )
 
         _LOGGER.warning(
             "[turn=%s] conversation text path start model=%s voice=%s tools=%d text=%r",
@@ -388,7 +390,7 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         if not transcribe_output and show_text and show_text_content is not None:
             assistant_text = show_text_content
         else:
-            assistant_text = "".join(text_response_parts)
+            assistant_text = "".join(text_response_parts) or (show_text_content if show_text else "")
 
         if not assistant_text:
             _LOGGER.error("[turn=%s] live-model text path returned no usable text", turn_id)

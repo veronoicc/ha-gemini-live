@@ -402,7 +402,8 @@ async def test_barge_in_drops_provider_transcript_when_transcription_disabled(
     for task in list(hass.background_tasks):
         await asyncio.wait_for(task, 15)
 
-    turn = turn_store.take_voice_turn("conversation-1", result.text)
+    stored_conv_id = turn_store._voice_turns[0].conversation_id if turn_store._voice_turns else "conversation-1"
+    turn = turn_store.take_voice_turn(stored_conv_id, result.text)
     assert turn is not None
     assert turn.assistant_text_stream is None
     assert "transcript" not in turn.assistant_text

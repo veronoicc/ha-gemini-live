@@ -2,8 +2,15 @@
 
 from types import SimpleNamespace
 
-from gemini_live.gemini import GeminiLiveClient, GeminiLiveSession, _gemini_config
-from gemini_live.live import LiveConfig, LiveEvent
+from gemini_live.gemini import (
+    GeminiLiveClient,
+    GeminiLiveSession,
+    _escape_decode,
+    _gemini_config,
+    _gemini_schema,
+    _gemini_tool,
+)
+from gemini_live.live import LiveConfig, LiveEvent, LiveTool, LiveToolResponse
 
 
 def _make_config(**overrides) -> LiveConfig:
@@ -235,3 +242,75 @@ async def test_gemini_legacy_does_not_reenter_sdk_receive():
 
     assert events == [LiveEvent(interrupted=True, turn_complete=True)]
     assert sdk_session.receive_count == 1
+
+
+def test_gemini_schema_handles_anyof_and_oneof():
+    anyof_schema = {
+        "anyOf": [
+            {"type": "string", "description": "Single entity ID"},
+            {"type": "array", "items": {"type": "string"}},
+        ]
+    }
+    converted = _gemini_schema(anyof_schema)
+    assert converted["type"] == "STRING"
+    assert converted["description"] == "Single entity ID"
+
+    oneof_schema = {
+        "oneOf": [
+            {"type": "integer"},
+            {"type": "number"},
+        ]
+    }
+    assert _gemini_schema(oneof_schema)["type"] == "INTEGER"
+
+
+def test_gemini_tool_sets_blocking_behavior():
+    tool = LiveTool(name="test_tool", description="A test tool", parameters={"type": "object"})
+    declaration = _gemini_tool(tool)
+    assert declaration["name"] == "test_tool"
+    assert declaration["description"] == "A test tool"
+    assert declaration["behavior"] == "BLOCKING"
+
+
+def test_escape_decode_safe_with_stray_backslashes():
+    # Backslashes not forming valid escapes must not crash
+    assert _escape_decode(r"\xinvalid") == r"\xinvalid"
+    assert _escape_decode(r"Room \ Kitchen") == r"Room \ Kitchen"
+    assert _escape_decode({"key": r"\xinvalid"}) == {"key": r"\xinvalid"}
+    assert _escape_decode([r"\unothex"]) == [r"\unothex"]
+
+async def test_send_text_uses_send_client_content():
+    calls = []
+
+    class _FakeSessionWithContent:
+        async def send_client_content(self, *, turns, turn_complete):
+            calls.append((turns, turn_complete))
+
+    session = GeminiLiveSession(_FakeSessionWithContent())
+    await session.send_text("Hello Gemini")
+
+    assert len(calls) == 1
+    turns, turn_complete = calls[0]
+    assert turn_complete is True
+    assert len(turns) == 1
+    assert turns[0].parts[0].text == "Hello Gemini"
+
+
+async def test_send_tool_responses_wraps_primitive_results():
+    calls = []
+
+    class _FakeSessionWithToolResp:
+        async def send_tool_response(self, *, function_responses):
+            calls.append(function_responses)
+
+    session = GeminiLiveSession(_FakeSessionWithToolResp())
+    await session.send_tool_responses([
+        LiveToolResponse(name="light_toggle", call_id="c1", response="Done"),
+        LiveToolResponse(name="get_state", call_id="c2", response={"state": "on"}),
+    ])
+
+    assert len(calls) == 1
+    responses = calls[0]
+    assert len(responses) == 2
+    assert responses[0].response == {"result": "Done"}
+    assert responses[1].response == {"state": "on"}
