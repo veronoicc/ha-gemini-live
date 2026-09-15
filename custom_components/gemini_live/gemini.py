@@ -81,9 +81,8 @@ class GeminiLiveSession:
         from google.genai import types  # noqa: PLC0415
 
         await self._session.send_realtime_input(
-            media=types.Blob(data=audio, mime_type="audio/pcm;rate=16000")
+            audio=types.Blob(data=audio, mime_type="audio/pcm;rate=16000")
         )
-
     async def end_audio(self) -> None:
         await self._session.send_realtime_input(audio_stream_end=True)
 
