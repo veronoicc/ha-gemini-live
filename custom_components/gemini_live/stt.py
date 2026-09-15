@@ -947,17 +947,8 @@ class LiveModelSTT(SpeechToTextEntity):
 
                         if response.turn_complete:
                             if support_barge_in and replacement_response_pending:
-                                # This completes the interrupted assistant
-                                # generation, not the whole HA response stream.
-                                # The provider still owes a replacement response.
                                 _LOGGER.debug(
                                     "[turn=%s] interrupted generation completed; ignoring terminal turn completion",
-                                    turn_id,
-                                )
-                                continue
-                            if native_audio_model and not gemini_replied.is_set():
-                                _LOGGER.warning(
-                                    "[turn=%s] turnComplete before audio; keeping session open and waiting",
                                     turn_id,
                                 )
                                 continue
@@ -1145,7 +1136,6 @@ class LiveModelSTT(SpeechToTextEntity):
             )
         else:
             _LOGGER.warning("STT: No audio response received from the live model")
-
         final_text = input_transcript or response_text
         if first_audio.is_set():
             return SpeechResult(
@@ -1153,11 +1143,11 @@ class LiveModelSTT(SpeechToTextEntity):
                 SpeechResultState.SUCCESS,
             )
         if not final_text:
-            _LOGGER.error(
-                "STT: Live model returned no usable transcript or response text"
+            _LOGGER.warning(
+                "[turn=%s] STT: Live model returned no transcript or audio, treating as empty turn",
+                turn_id,
             )
-            return SpeechResult(None, SpeechResultState.ERROR)
-
+            return SpeechResult(self.tts_placeholder, SpeechResultState.SUCCESS)
         if not transcribe_output and show_text and show_text_content is not None:
             assistant_text = show_text_content
         else:

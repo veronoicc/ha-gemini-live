@@ -361,12 +361,6 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
                             text_response_parts.append(response.output_transcript)
 
                         if response.turn_complete:
-                            if native_audio_model and not audio_response_chunks:
-                                _LOGGER.warning(
-                                    "[turn=%s] text path turnComplete before audio; waiting",
-                                    turn_id,
-                                )
-                                continue
                             break
         except TimeoutError:
             _LOGGER.error("[turn=%s] %s text path timed out", turn_id, self.integration_name)
