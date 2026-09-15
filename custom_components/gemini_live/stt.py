@@ -664,9 +664,10 @@ class LiveModelSTT(SpeechToTextEntity):
                     diagnostics_enabled = _LOGGER.isEnabledFor(logging.DEBUG)
                     pcm_for_diag: list[bytes] = []
                     chunk_count = 0
-                    sample_rate = int(metadata.sample_rate) if metadata.sample_rate else 16000
                     speech_started = False
                     consecutive_silence = 0
+                    initial_silence = 0
+                    noise_floor: float | None = None
                     end_of_speech = False
                     _LOGGER.warning("[turn=%s] send_audio task spawned", turn_id)
 
@@ -719,19 +720,41 @@ class LiveModelSTT(SpeechToTextEntity):
                                 if num_s > 0:
                                     s_vals = struct.unpack(f"<{num_s}h", dispatch_chunk[: num_s * 2])
                                     rms = (sum(s * s for s in s_vals) / num_s) ** 0.5
-                                    if rms > 500:
+                                    if noise_floor is None:
+                                        noise_floor = rms
+                                    else:
+                                        noise_floor = min(noise_floor, rms)
+
+                                    speech_threshold = max(200.0, noise_floor * 2.0)
+                                    silence_threshold = max(100.0, noise_floor * 1.3)
+
+                                    if rms >= speech_threshold:
                                         speech_started = True
                                         consecutive_silence = 0
                                     elif speech_started:
-                                        consecutive_silence += 1
-                                        if consecutive_silence >= 7:
+                                        if rms <= silence_threshold:
+                                            consecutive_silence += 1
+                                            if consecutive_silence >= 6:
+                                                end_of_speech = True
+                                                break
+                                        else:
+                                            consecutive_silence = 0
+                                    else:
+                                        initial_silence += 1
+                                        if initial_silence >= 35:
                                             end_of_speech = True
                                             break
 
+                                    if chunk_count >= 80:
+                                        end_of_speech = True
+                                        break
+
                         if end_of_speech:
                             _LOGGER.warning(
-                                "[turn=%s] local silence detection triggered end of speech",
+                                "[turn=%s] local silence detection triggered end of speech (chunks=%d, speech_started=%s)",
                                 turn_id,
+                                chunk_count,
+                                speech_started,
                             )
                             break
 
