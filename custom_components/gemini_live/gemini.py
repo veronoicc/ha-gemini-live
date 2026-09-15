@@ -215,11 +215,21 @@ def _gemini_tool(tool: LiveTool) -> dict[str, Any]:
         "behavior": "BLOCKING",
     }
     if tool.parameters:
-        declaration["parameters"] = _gemini_schema(tool.parameters)
+        params = _gemini_schema(tool.parameters)
+        if not isinstance(params, dict) or params.get("type") != "OBJECT":
+            params = {
+                "type": "OBJECT",
+                "properties": {"value": params} if params else {"json": {"type": "STRING"}},
+                "required": [],
+            }
+        declaration["parameters"] = params
     return declaration
 
 
 def _gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(schema, dict):
+        return {"type": "STRING"}
+
     for combinator in ("allOf", "anyOf", "oneOf"):
         if subschemas := schema.get(combinator):
             for subschema in subschemas:
@@ -235,9 +245,12 @@ def _gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
             continue
         value = original_value
         if key == "type":
-            value = value.upper()
+            if isinstance(value, list):
+                types = [v for v in value if v != "null"]
+                value = types[0] if types else "string"
+            value = str(value).upper()
         elif key == "format":
-            schema_type = schema.get("type")
+            schema_type = str(schema.get("type", "")).lower()
             supported = {
                 "string": ("enum", "date-time"),
                 "number": ("float", "double"),
@@ -246,17 +259,54 @@ def _gemini_schema(schema: dict[str, Any]) -> dict[str, Any]:
             if value not in supported.get(schema_type, ()):
                 continue
         elif key == "items":
-            value = _gemini_schema(value)
+            if isinstance(value, dict):
+                value = _gemini_schema(value)
+            else:
+                value = {"type": "STRING"}
         elif key == "properties":
-            value = {name: _gemini_schema(item) for name, item in value.items()}
+            if isinstance(value, dict):
+                value = {name: _gemini_schema(item) for name, item in value.items()}
+            else:
+                continue
+        elif key == "required":
+            if not isinstance(value, list):
+                continue
+            value = [str(item) for item in value]
         result[key] = value
 
-    if result.get("enum") and result.get("type") != "STRING":
+    schema_type = result.get("type")
+    if not schema_type:
+        if result.get("properties"):
+            schema_type = "OBJECT"
+        elif result.get("items"):
+            schema_type = "ARRAY"
+        elif result.get("enum"):
+            schema_type = "STRING"
+        else:
+            schema_type = "STRING"
+        result["type"] = schema_type
+
+    if schema_type == "OBJECT":
+        if not result.get("properties"):
+            result["properties"] = {"json": {"type": "STRING"}}
+            result["required"] = []
+        elif "required" in result:
+            props = result["properties"]
+            result["required"] = [r for r in result["required"] if r in props]
+    else:
+        result.pop("required", None)
+        result.pop("properties", None)
+
+    if schema_type == "ARRAY":
+        if not result.get("items"):
+            result["items"] = {"type": "STRING"}
+    else:
+        result.pop("items", None)
+
+    if result.get("enum") and schema_type != "STRING":
         result["type"] = "STRING"
         result["enum"] = [str(item) for item in result["enum"]]
-    if result.get("type") == "OBJECT" and not result.get("properties"):
-        result["properties"] = {"json": {"type": "STRING"}}
-        result["required"] = []
+
     return result
 
 

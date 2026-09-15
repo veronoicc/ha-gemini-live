@@ -264,6 +264,35 @@ def test_gemini_schema_handles_anyof_and_oneof():
     assert _gemini_schema(oneof_schema)["type"] == "INTEGER"
 
 
+def test_gemini_schema_removes_required_from_non_object_types():
+    schema = {
+        "type": "string",
+        "required": ["area_id"],
+        "properties": {"foo": {"type": "string"}},
+    }
+    converted = _gemini_schema(schema)
+    assert converted["type"] == "STRING"
+    assert "required" not in converted
+    assert "properties" not in converted
+
+
+def test_gemini_schema_filters_required_to_existing_properties():
+    schema = {
+        "type": "object",
+        "properties": {"target": {"type": "string"}},
+        "required": ["target", "nonexistent"],
+    }
+    converted = _gemini_schema(schema)
+    assert converted["type"] == "OBJECT"
+    assert converted["required"] == ["target"]
+
+
+def test_gemini_tool_ensures_top_level_object():
+    tool = LiveTool(name="test_primitive", description="Desc", parameters={"type": "string"})
+    declaration = _gemini_tool(tool)
+    assert declaration["parameters"]["type"] == "OBJECT"
+    assert "properties" in declaration["parameters"]
+
 def test_gemini_tool_sets_blocking_behavior():
     tool = LiveTool(name="test_tool", description="A test tool", parameters={"type": "object"})
     declaration = _gemini_tool(tool)
