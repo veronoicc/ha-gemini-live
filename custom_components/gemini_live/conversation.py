@@ -493,12 +493,14 @@ class LiveModelConversationAgent(conversation.ConversationEntity):
         intent_response = IntentResponse(language=language)
         intent_response.async_set_speech(assistant_text)
 
+        should_continue = session_manager.should_continue_conversation(conversation_id)
+        cleaned_text = (assistant_text or "").strip().rstrip("\"' )")
+        continue_conversation = should_continue and cleaned_text.endswith("?")
+
         return conversation.ConversationResult(
             response=intent_response,
             conversation_id=conversation_id,
-            continue_conversation=(
-                session_manager.should_continue_conversation(conversation_id)
-            ),
+            continue_conversation=continue_conversation,
         )
 
 

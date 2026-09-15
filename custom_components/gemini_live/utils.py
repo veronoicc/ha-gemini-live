@@ -84,26 +84,19 @@ def resample_16k_to_24k(data: bytes) -> bytes:
 
 
 def _resample_24k_to_16k_numpy(data: bytes) -> bytes:
-    """Resample using NumPy while matching the pure-Python implementation."""
+    """Resample using NumPy linear interpolation."""
     num_samples = len(data) // 2
     if num_samples == 0:
         return b""
 
     samples = np.frombuffer(data[: num_samples * 2], dtype="<i2")
-    triplets = num_samples // 3
-    if triplets == 0:
-        return data[:2]
+    num_out = int(num_samples * 2 / 3)
+    if num_out == 0:
+        return b""
 
-    triples = samples[: triplets * 3].reshape(triplets, 3)
-    output = np.empty(triplets * 2, dtype="<i2")
-    output[0::2] = triples[:, 0]
-    output[1::2] = (
-        (triples[:, 1].astype(np.int32) + triples[:, 2]) // 2
-    ).astype(np.int16)
-    if num_samples > triplets * 3:
-        output = np.concatenate(
-            (output, samples[triplets * 3 : triplets * 3 + 1])
-        )
+    t_in = np.arange(num_samples)
+    t_out = np.arange(num_out) * 1.5
+    output = np.interp(t_out, t_in, samples).astype("<i2")
     return output.tobytes()
 
 

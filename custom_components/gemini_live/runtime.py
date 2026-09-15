@@ -81,11 +81,35 @@ class AudioStream:
             )
 
     async def async_chunks(self) -> AsyncGenerator[bytes]:
-        """Yield buffered and future PCM chunks."""
+        """Yield buffered and future PCM chunks with jitter smoothing."""
         consumed = False
         try:
+            # Pre-buffer first ~150ms (4800 bytes of 16kHz 16-bit mono PCM) to absorb network jitter
+            prebuffer = bytearray()
+            while len(prebuffer) < 4800 and not self._finished:
+                try:
+                    chunk = await asyncio.wait_for(self._queue.get(), timeout=0.08)
+                    if chunk is None:
+                        break
+                    prebuffer.extend(chunk)
+                except asyncio.TimeoutError:
+                    break
+            if prebuffer:
+                yield bytes(prebuffer)
+
+            # Continue yielding remaining chunks, coalescing if multiple available
             while (chunk := await self._queue.get()) is not None:
-                yield chunk
+                batch = bytearray(chunk)
+                while not self._queue.empty():
+                    try:
+                        next_chunk = self._queue.get_nowait()
+                        if next_chunk is None:
+                            self._queue.put_nowait(None)
+                            break
+                        batch.extend(next_chunk)
+                    except asyncio.QueueEmpty:
+                        break
+                yield bytes(batch)
             consumed = True
         finally:
             if not consumed and self._on_cancel is not None:

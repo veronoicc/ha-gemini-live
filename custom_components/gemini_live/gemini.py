@@ -172,8 +172,18 @@ class GeminiLiveSession:
             if not receive_next_turn:
                 break
 
-
 def _gemini_config(config: LiveConfig) -> dict[str, Any]:
+    realtime_input: dict[str, Any] = {
+        "turn_coverage": "TURN_INCLUDES_ONLY_ACTIVITY",
+    }
+    if config.support_barge_in:
+        realtime_input["automatic_activity_detection"] = {
+            "disabled": False,
+        }
+        realtime_input["activity_handling"] = "START_OF_ACTIVITY_INTERRUPTS"
+    else:
+        realtime_input["activity_handling"] = "NO_INTERRUPTION"
+
     result: dict[str, Any] = {
         "response_modalities": ["AUDIO"],
         "speech_config": {
@@ -183,21 +193,8 @@ def _gemini_config(config: LiveConfig) -> dict[str, Any]:
         },
         "system_instruction": {"parts": [{"text": config.system_instruction}]},
         "input_audio_transcription": {},
-        "realtime_input_config": {
-            "turn_coverage": "TURN_INCLUDES_ONLY_ACTIVITY"
-        },
+        "realtime_input_config": realtime_input,
     }
-    if config.support_barge_in:
-        # START_OF_ACTIVITY_INTERRUPTS is Gemini's barge-in mode: new user
-        # speech interrupts the current generation. Set explicitly so the
-        # behaviour is deterministic and tied to the configuration option.
-        result["realtime_input_config"] = {
-            "automatic_activity_detection": {
-                "disabled": False,
-            },
-            "activity_handling": "START_OF_ACTIVITY_INTERRUPTS",
-            "turn_coverage": "TURN_INCLUDES_ONLY_ACTIVITY",
-        }
     if config.transcribe_output:
         result["output_audio_transcription"] = {}
     if config.tools:

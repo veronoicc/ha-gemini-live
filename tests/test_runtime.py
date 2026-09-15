@@ -93,5 +93,14 @@ def test_config_signature_changes_when_barge_in_toggles():
     barge_in = _make_config(support_barge_in=True)
 
     signature = LiveSessionManager._config_signature
-
     assert signature(legacy) != signature(barge_in)
+
+
+async def test_audio_stream_coalesces_and_smooths_chunks():
+    stream = AudioStream()
+    stream.add_chunk(b"1234")
+    stream.add_chunk(b"5678")
+    stream.finish()
+
+    chunks = [chunk async for chunk in stream.async_chunks()]
+    assert b"".join(chunks) == b"12345678"
